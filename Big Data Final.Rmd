@@ -1,0 +1,243 @@
+---
+title: "Big Data Final Project"
+author: "LiJoy"
+date: "2023-04-21"
+output: html_document
+---
+
+Model 2. Use the training set for data1 to estimate RandomForest (RF) model for Y1.
+```{r}
+#set the working directory 
+setwd("~/Desktop/Big Data/R_datasets")
+```
+
+
+
+```{r}
+
+#load the required libraries/packages 
+#install.packages("rpart")
+#install.packages("rpart.plot")
+#install.packages("randomForest")
+#install.packages("xgboost")
+#install.packages("Matrix")
+#install.packages("caret")
+#install.packages("gains")
+#install.packages("forecast")
+#install.packages("ggplot2)
+
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(xgboost)
+library(Matrix)
+library(caret)
+library(gains)
+library(forecast)
+library(ggplot2)
+```
+
+
+
+
+```{r}
+# whatever looks better on screen
+# no scientific notation
+options(scipen=999)
+# or scientific notation
+options(scipen=0)
+```
+
+
+
+```{r}
+#### Read CSV data 
+Voter <- read.csv("VoterNew1new.csv")
+
+names(Voter)
+str(Voter)
+table(Voter$MED_AGE)
+```
+
+
+
+
+```{r}
+#Make categorical variables as factors to include in the tree OR create dummy variables
+# optional in this case - Education is a rank variable
+Voter$M_MAR=as.factor(Voter$M_MAR) 
+Voter$NH_WHITE=as.factor(Voter$NH_WHITE)
+Voter$HISP=as.factor(Voter$HISP)
+Voter$MED_AGE=as.factor(Voter$MED_AGE)
+Voter$NH_MULT=as.factor(Voter$NH_MULT)
+Voter$COMM_LT10=as.factor(Voter$COMM_LT10)
+Voter$NH_AA=as.factor(Voter$NH_AA)
+Voter$COMM_609P=as.factor(Voter$COMM_609P)
+```
+
+
+```{r}
+myvars2 <- c("Y1","NH_WHITE","M_MAR","NH_AA","HISP","NH_MULT","MED_AGE","COMM_LT10","COMM_609P")
+data1 <- Voter[myvars2]
+```
+
+
+```{r}
+# partition
+set.seed(1)  
+train.index <- sample(c(1:dim(data1)[1]), dim(data1)[1]*0.6)  
+valid.index <- setdiff(c(1:dim(data1)[1]), train.index)  
+train1 <- data1[train.index, ]
+valid1 <- data1[valid.index, ]
+
+str(train1)
+```
+
+
+
+```{r}
+# RF with all variables, change parameters specify
+# mtry: Number of variables randomly sampled as candidates at each split.
+# ntree: Number of trees to grow
+# nodesize = min size of terminal nodes (# of cases)
+# importance: Should importance of predictors be assessed?
+
+
+rf1 <- randomForest(Y1 ~ ., data = train1, ntree = 500, 
+                   mtry = 4, nodesize = 5, importance = TRUE)  
+print(rf1)
+```
+
+
+
+```{r}
+# show importance measures
+round(importance(rf1), 2)
+# RMSE for training
+# obtain MSE as of last element in rf1$mse
+rf1$mse[length(rf1$mse)]
+# take square root to calculate RMSE for the model
+sqrt(rf1$mse[length(rf1$mse)])
+
+### RMSE for the validation data
+predict1<-predict(rf1,valid1)
+sqrt(mean((valid1$Y1-predict1)^2))
+```
+
+
+
+```{R}
+mean_y1 <- mean(data1$Y1)
+mean_y1
+```
+
+
+```{r}
+rel_rmse <- 100 * (2941.924 / 70417.63)
+rel_rmse
+```
+
+Model 3. Use the training set for data1 to estimate NeuralNet (NN) model for Y1.
+
+```{r}
+#install.packages('forecast')
+#install.packages('dplyr')
+#install.packages('caret')
+#install.packages('neuralnet')
+#install.packages('NeuralNetTools')
+
+library(forecast)
+library(dplyr)  #normalizing some variables
+library(caret)
+library(NeuralNetTools)
+library(neuralnet) # be the last lib
+```
+
+
+
+```{r}
+#create formula for the model
+formulaT<- Y1 ~  NH_WHITE + M_MAR + NH_AA + 
+              HISP + NH_MULT + MED_AGE + COMM_LT10 + 
+              COMM_609P
+class(formulaT)
+formulaT
+```
+
+
+
+```{r}
+train1$NH_WHITE=as.numeric(train1$NH_WHITE)
+train1$NH_AA=as.numeric(train1$NH_AA)
+train1$HISP=as.numeric(train1$HISP)
+train1$NH_MULT=as.numeric(train1$NH_MULT)
+train1$MED_AGE=as.numeric(train1$MED_AGE)
+```
+
+
+
+
+```{r}
+nnT1<-neuralnet(formulaT,train1, hidden=2, algorithm="rprop+",
+               err.fct="sse", rep=2,stepmax=1000000,
+               threshold=0.01, linear.output=TRUE)
+#plot NN
+plot(nnT1,show.weights=FALSE)
+plot(nnT1)
+
+```
+
+
+
+
+```{r}
+# show importance measures
+round(importance(rf1), 2)
+setwd("~/Desktop")
+# variable importance
+olden(nnT1,file = "myplot.png")
+```
+
+
+```{r}
+valid1$NH_WHITE=as.numeric(valid1$NH_WHITE)
+valid1$NH_AA=as.numeric(valid1$NH_AA)
+valid1$HISP=as.numeric(valid1$HISP)
+valid1$NH_MULT=as.numeric(valid1$NH_MULT)
+valid1$MED_AGE=as.numeric(valid1$MED_AGE)
+#predicted from valid data
+predT <- neuralnet::compute(nnT1,valid1[2:9])
+
+# predicted from valid
+predTT<-predT$net.result
+
+#### actual and predicted
+actualTT<-valid1$Y1
+```
+
+
+
+
+```{r}
+#The root mean square error
+sqr_err<-(actualTT-predTT)^2
+sum(sqr_err)
+mean(sqr_err)
+sqrt(mean(sqr_err))
+
+```
+
+
+```{r}
+# compare RNMSE to the mean as percent
+mean(data1$Y1)
+
+errorT=(sqrt(mean(sqr_err)))/(mean(data1$Y1))*100
+errorT
+
+
+##### end NN continuous ############################################
+```
+
+
+
