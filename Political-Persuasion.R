@@ -1,6 +1,3 @@
-### Big Data Final Project###
-## Team7 ##
-
 setwd("~/Desktop/Big Data/R_datasets")
 
 # Load the libraries
